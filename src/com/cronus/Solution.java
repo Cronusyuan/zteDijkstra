@@ -1,81 +1,115 @@
 package com.cronus;
 
+import java.util.Arrays;
+import java.util.LinkedList;
+
 /**
- * Created by cronusyuan on 17-4-24.
- * 输入文件格式：
- * 有n个节点，m条边，节点默认编号0~n-1，起始节点编号vS，结束节点编号vE，x个必须经过节点，y个必须经过边，z个不能经过边
- * 形式如下：
- * n m vS vE x y z
- * 0 0 1 3
- * 1 0 2 5
- * ……       共m行边信息，分别为编号、起始点、终止点、花费
- * m-1 5 6 10
- * 5 9      x个数，代表必须经过的x个节点，第m+1行
- * 1 10     y个数，代表必须经过的y条边，第m+2行
- * 6        z个数，代表不能经过的z条边，第m+3行
+ * Created by cronusyuan on 17-5-2.
+ * Graph-传入的图，包含邻接矩阵信息与约束信息
+ * prev-前驱节点，prev[i][j]表示i为起点时j的前驱节点
+ * dist-距离矩阵，dist[i][j]表示i为起点时j到i的最短距离
  */
-public class Solution {
-    private class Edge{
-        private int vertexId1;
-        private int vertexId2;
-        private int cost;
+public final class Solution {
+    private Integer[][] prev;
+    private Integer[][] dist;
+    private Integer[][] graph;
+    private int limit;
+    private int[] targets;
+    private String[] edges;
+    private int[] bonuses;
+    private int defaultVS;
+    private int defaultVE;
 
-        private Edge(){}
-        public Edge(int v1, int v2, int c){
-            this.vertexId1 = v1;
-            this.vertexId2 = v2;
-            this.cost = c;
-        }
+    public Solution(Graph input){
+        graph = input.getGraph();
+        limit = input.getLimit();
+        targets = input.getTargetVertexes();
+        edges = input.getEdges();
+        bonuses = input.getBonusEdges();
+        defaultVS = input.getVertexStart();
+        defaultVE = input.getVertexEnd();
 
-        public int getVertexId1(){return vertexId1;}
-        public int getVertexId2(){return vertexId2;}
-        public int getCost(){return cost;}
+        prev = new Integer[graph.length][graph.length];
+        dist = new Integer[graph.length][graph.length];
+
+        for(int i = 0;i < graph.length; i++)
+            dijkstraAll(i);
     }
 
-    private int vertexes;
-    private Edge[] edges;
-
-    private int startVertex;
-    private int endVertex;
-    private int[] targetVertexes;
-    private Edge[] bonusEdges;
-    private Edge[] forbiddenEdges;
-
-    private static final int LIMIT = 9;
-
-    private Solution(){}
-    public Solution(String[] input){
-        String[] basicInfo = input[0].split(" ");
-        vertexes = Integer.parseInt(basicInfo[0]);
-        startVertex = Integer.parseInt(basicInfo[2]);
-        endVertex = Integer.parseInt(basicInfo[3]);
-        int edgeNum = Integer.parseInt(basicInfo[1]), targetNum = Integer.parseInt(basicInfo[4]);
-        int bonusNum = Integer.parseInt(basicInfo[5]), forbiddenNum = Integer.parseInt(basicInfo[6]);
-        edges = new Edge[edgeNum];
-        targetVertexes = new int[targetNum];
-        bonusEdges = new Edge[bonusNum];
-        forbiddenEdges = new Edge[forbiddenNum];
-
-        for(int i = 0; i < edges.length; i++){
-            String[] thisInfo = input[i + 1].split(" ");
-            int v1 = Integer.parseInt(thisInfo[1]), v2 = Integer.parseInt(thisInfo[2]), cost = Integer.parseInt(thisInfo[3]);
-            Edge edge = new Edge(v1, v2, cost);
-            edges[i] = edge;
+    private void dijkstraAll(int vS){
+        boolean[] flag = new boolean[graph.length];
+        for(int i = 0; i < graph.length; i++){
+            flag[i] = false;
+            dist[vS][i] = graph[vS][i];
+            prev[vS][i] = vS;
         }
+        flag[vS] = true;
+        dist[vS][vS] = 0;
+        prev[vS][vS] = null;
 
-        String[] targetVertexsInfo = input[edgeNum + 1].split(" ");
-        for(int i = 0; i < targetVertexes.length; i++){
-            targetVertexes[i] = Integer.parseInt(targetVertexsInfo[i]);
+        for(int i = 0; i < graph.length; i++){
+            Integer min = null;
+            Integer pos = null;
+            for(int j = 0; j < graph.length; j++){
+                if(!flag[j] && dist[vS][j] != null){
+                    if(min == null || dist[vS][j] < min){
+                        min = dist[vS][j];
+                        pos = j;
+                    }
+                }
+            }
+            if(min == null){
+                for(boolean f : flag)
+                    f = true;
+            }
+            else{
+                flag[pos] = true;
+                for(int j = 0; j < graph.length; j++){
+                    Integer temp = graph[pos][j] == null ? null : (min + graph[pos][j]);
+                    if(!flag[j] && temp != null){
+                        if(dist[vS][j] == null || dist[vS][j] > temp){
+                            dist[vS][j] = temp;
+                            prev[vS][j] = pos;
+                        }
+                    }
+                }
+            }
         }
+    }
 
-        String[] bonusEdgesInfo = input[edgeNum + 2].split(" ");
-        for(int i = 0; i < bonusEdges.length; i++){
-            bonusEdges[i] = edges[Integer.parseInt(bonusEdgesInfo[i])];
-        }
+    private LinkedList<Integer> vertexConstaints(int vS, int vE){
+        LinkedList<Integer> result = new LinkedList<>();
 
-        String[] forbiddenEdgesInfo = input[edgeNum + 3].split(" ");
-        for(int i = 0;i < forbiddenEdges.length; i++){
-            forbiddenEdges[i] = edges[Integer.parseInt(forbiddenEdgesInfo[i])];
+        return result;
+    }
+    private LinkedList<Integer> noConstrains(int vS, int vE){
+        LinkedList<Integer> result = new LinkedList<>();
+        Integer node = vE;
+        while(node != null){
+            result.addFirst(node);
+            node = prev[vS][node];
         }
+        return result;
+    }
+
+    public void result(){this.result(defaultVS, defaultVE);}
+    public void result(int vS, int vE){
+        if(dist[vS][vE] == null){
+            System.out.println(vS + "节点到" + vE + "节点不连通！");
+        }
+        else {
+            print(noConstrains(vS, vE));
+        }
+    }
+
+    private void print(LinkedList<Integer> path){
+        if(path.size() > limit)
+            System.out.println("【超出了节点数限制：" + limit + "】参考路径为：");
+        System.out.println("节点" + path.get(0) + "到节点" + path.get(path.size() - 1) + "的路径寻找结果：");
+        System.out.println(path + "共" + path.size() + "个节点");
+        int distance = 0;
+        for(int i = 0; i < path.size() - 1; i++)
+            distance += dist[path.get(i)][path.get(i + 1)];
+        System.out.println("总路程花费：" + distance);
     }
 }
