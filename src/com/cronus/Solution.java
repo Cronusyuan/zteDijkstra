@@ -9,7 +9,7 @@ import java.util.LinkedList;
  * prev-前驱节点，prev[i][j]表示i为起点时j的前驱节点
  * dist-距离矩阵，dist[i][j]表示i为起点时j到i的最短距离
  */
-public final class Solution {
+final class Solution {
     private Integer[][] prev;
     private Integer[][] dist;
     private Integer[][] graph;
@@ -17,23 +17,63 @@ public final class Solution {
     private int[] targets;
     private String[] edges;
     private int[] bonuses;
+    private int[] forbiddens;
     private int defaultVS;
     private int defaultVE;
 
-    public Solution(Graph input){
+    private class Constraint{
+        private boolean vertex;
+        private int val;
+        private int val2;
+        private int distance;
+        Constraint(int input){
+            vertex = true;
+            val = input;
+        }
+        Constraint(int input1, int input2, int dis){
+            vertex = false;
+            val = input1;
+            val2 = input2;
+            distance = dis;
+        }
+        boolean isVertex(){return vertex;}
+        int getVal(){return val;}
+        int getVal2(){return !vertex ? val2 : val;}
+        int getDistance(){return  !vertex ? distance : 0;}
+        void reverseVal(){
+            if(!vertex){
+                int tmp = val;
+                val = val2;
+                val2 = tmp;
+            }
+        }
+    }
+
+    Solution(Graph input){
         graph = input.getGraph();
         limit = input.getLimit();
         targets = input.getTargetVertexes();
         edges = input.getEdges();
         bonuses = input.getBonusEdges();
+        forbiddens = input.getForbiddenEdges();
         defaultVS = input.getVertexStart();
         defaultVE = input.getVertexEnd();
 
         prev = new Integer[graph.length][graph.length];
         dist = new Integer[graph.length][graph.length];
 
+        forbidEdges();
         for(int i = 0;i < graph.length; i++)
             dijkstraAll(i);
+    }
+
+    private void forbidEdges(){
+        for(int i = 0; i < forbiddens.length; i++){
+            String[] info = edges[forbiddens[i]].split(" ");
+            int v1 = Integer.parseInt(info[0]), v2 = Integer.parseInt(info[1]);
+            graph[v1][v2] = null;
+            graph[v2][v1] = null;
+        }
     }
 
     private void dijkstraAll(int vS){
@@ -59,8 +99,8 @@ public final class Solution {
                 }
             }
             if(min == null){
-                for(boolean f : flag)
-                    f = true;
+                for(int j = 0; j < flag.length; j++)
+                    flag[j] = true;
             }
             else{
                 flag[pos] = true;
@@ -77,39 +117,147 @@ public final class Solution {
         }
     }
 
-    private LinkedList<Integer> vertexConstaints(int vS, int vE){
-        LinkedList<Integer> result = new LinkedList<>();
-
-        return result;
-    }
-    private LinkedList<Integer> noConstrains(int vS, int vE){
-        LinkedList<Integer> result = new LinkedList<>();
-        Integer node = vE;
-        while(node != null){
-            result.addFirst(node);
-            node = prev[vS][node];
+    void result(){
+        Constraint start = new Constraint(defaultVS);
+        Constraint end = new Constraint(defaultVE);
+        LinkedList<Constraint> constraints = new LinkedList<>();
+        for(int target : targets){
+            Constraint cons = new Constraint(target);
+            constraints.add(cons);
         }
-        return result;
-    }
-
-    public void result(){this.result(defaultVS, defaultVE);}
-    public void result(int vS, int vE){
-        if(dist[vS][vE] == null){
-            System.out.println(vS + "节点到" + vE + "节点不连通！");
+        for(int bonus : bonuses){
+            String[] info = edges[bonus].split(" ");
+            Constraint cons = new Constraint(Integer.parseInt(info[0]), Integer.parseInt(info[1]), Integer.parseInt(info[2]));
+            constraints.add(cons);
+        }
+        LinkedList<Integer> abandoned = new LinkedList<>();
+        LinkedList<Constraint> linkedCons = linkedConstraints(constraints, abandoned);
+        if(linkedCons == null){
+            System.out.println("起点与终点不连通！");
         }
         else {
-            print(noConstrains(vS, vE));
+            LinkedList<LinkedList<Constraint>> all = new LinkedList<>();
+            allPermutations(all, linkedCons.toArray(new Constraint[linkedCons.size()]), 0);
+            for (LinkedList<Constraint> one : all) {
+                one.addFirst(start);
+                one.add(end);
+            }
+            LinkedList<Constraint> bestPath = pathSelect(all);
+            LinkedList<Integer> path = pathDetail(bestPath);
+            System.out.println("从" + path.get(0) + "到" + path.get(path.size() - 1) + "的满足全约束最短路径：");
+            System.out.println(path);
+            if(abandoned.size() != 0)
+                System.out.println("因不连通舍去的约束：" + abandoned);
+            String flag = path.size() > limit ? "【不" : "【";
+            System.out.println("总结点数：" + path.size() + flag + "满足节点数要求" + limit + "】");
+            System.out.println("总路径长度：" + distance(bestPath));
         }
     }
 
-    private void print(LinkedList<Integer> path){
-        if(path.size() > limit)
-            System.out.println("【超出了节点数限制：" + limit + "】参考路径为：");
-        System.out.println("节点" + path.get(0) + "到节点" + path.get(path.size() - 1) + "的路径寻找结果：");
-        System.out.println(path + "共" + path.size() + "个节点");
-        int distance = 0;
-        for(int i = 0; i < path.size() - 1; i++)
-            distance += dist[path.get(i)][path.get(i + 1)];
-        System.out.println("总路程花费：" + distance);
+    private void allPermutations(LinkedList<LinkedList<Constraint>> res, Constraint[] cons, int index){
+        if(index >= cons.length){
+            int[] pos = new int[bonuses.length];
+            int cur = 0;
+            for(int i = 0; i < cons.length; i++){
+                if(!cons[i].isVertex()){
+                    pos[cur] = i;
+                    cur++;
+                }
+            }
+            for(int i = 0; i < Math.pow(2, bonuses.length); i++){
+                boolean[] flag = new boolean[bonuses.length];
+                int num = i;
+                for(int j = 0; j < flag.length; j++){
+                    if(num % 2 == 0)
+                        flag[j] = false;
+                    else
+                        flag[j] = true;
+                    num /= 2;
+                }
+                Constraint[] tmp = Arrays.copyOf(cons, cons.length);
+                for(int j = 0; j < flag.length; j++){
+                    if(flag[j])
+                        tmp[pos[j]].reverseVal();
+                }
+                res.add(new LinkedList<>(Arrays.asList(tmp)));
+            }
+        }
+        else{
+            for(int i = index; i < cons.length; i++){
+                Constraint tmp = cons[index];
+                cons[index] = cons[i];
+                cons[i] = tmp;
+                allPermutations(res, cons, index + 1);
+                Constraint tmp2 = cons[index];
+                cons[index] = cons[i];
+                cons[i] = tmp2;
+            }
+        }
+    }
+
+    private int distance(LinkedList<Constraint> path){
+        int result = 0;
+        for(int i = 0; i < path.size() - 1; i++){
+            Constraint cons = path.get(i);
+            Constraint next = path.get(i + 1);
+            if(cons.isVertex()){
+                result += dist[cons.getVal()][next.getVal()];
+            }
+            else{
+                result += cons.getDistance();
+                result += dist[cons.getVal2()][next.getVal()];
+            }
+        }
+        return result;
+    }
+
+    private LinkedList<Constraint> linkedConstraints(LinkedList<Constraint> allConstraints, LinkedList<Integer> abandoned){
+        LinkedList<Constraint> result = new LinkedList<>();
+        if(dist[defaultVS][defaultVE] == null)
+            return null;
+        else{
+            for(int i = 0; i < allConstraints.size(); i++){
+                if(dist[allConstraints.get(i).getVal()][defaultVE] != null) {
+                    result.add(allConstraints.get(i));
+                }
+                else{
+                    abandoned.add(allConstraints.get(i).getVal());
+                    if(!allConstraints.get(i).isVertex())
+                        abandoned.add(allConstraints.get(i).getVal2());
+                }
+            }
+        }
+        return result;
+    }
+
+    private LinkedList<Constraint> pathSelect(LinkedList<LinkedList<Constraint>> paths){
+        int min = distance(paths.get(0)), pos = 0;
+        for(int i = 1; i < paths.size(); i++){
+            int temp = distance(paths.get(i));
+            if(temp < min){
+                min = temp;
+                pos = i;
+            }
+        }
+        return paths.get(pos);
+    }
+
+    private LinkedList<Integer> pathDetail(LinkedList<Constraint> path){
+        LinkedList<Integer> result = new LinkedList<>();
+        Integer node = path.get(0).getVal();
+        for(int i = 0; i < path.size() - 1; i++){
+            Constraint now = path.get(i);
+            Constraint next = path.get(i + 1);
+            if(!now.isVertex()){
+                result.add(now.getVal());
+                node = now.getVal2();
+            }
+            while(node != next.getVal()){
+                result.add(node);
+                node = prev[next.getVal()][node];
+            }
+        }
+        result.add(path.get(path.size() - 1).getVal());
+        return result;
     }
 }
